@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="المُلقِّن">
+<meta name="theme-color" content="#0b0d10">
+<title>المُلقِّن</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
+<style>
+/* شاشةُ كاميرا كاملة، والنصُّ في الثلث العلويّ قربَ العدسة كي تبقى العينُ على الكاميرا */
+:root{
+  --ink:#0b0d10; --glass:rgba(11,13,16,.55); --line:rgba(255,255,255,.14);
+  --fg:#f4f6f8; --dim:#9aa3ad; --rec:#ff3b30; --mark:#ffd166;
+  --ui:"IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",Tahoma,sans-serif;
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
+  color-scheme:dark;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;background:var(--ink);color:var(--fg);font-family:var(--ui);overflow:hidden;overscroll-behavior:none}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--mark);outline-offset:2px}
+[hidden]{display:none!important}
+
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+#cam.mirror{transform:scaleX(-1)}
+
+/* ‏المُلقِّن */
+#prompter{position:fixed;top:0;left:0;right:0;height:calc(var(--ph,38) * 1vh + var(--st));
+  padding-top:var(--st);background:rgba(0,0,0,var(--po,.5));overflow:hidden;touch-action:none;
+  -webkit-mask-image:linear-gradient(#000 82%,transparent);mask-image:linear-gradient(#000 82%,transparent)}
+#track{padding:calc(var(--fs,34px) * 1.2) max(20px,var(--sr)) 60vh max(20px,var(--sl));will-change:transform}
+#track.flip{transform-origin:center}
+#text{font-size:var(--fs,34px);line-height:1.55;font-weight:500;white-space:pre-wrap;word-break:break-word;text-align:var(--ta,right);
+  text-shadow:0 1px 3px rgba(0,0,0,.6)}
+#text.mirror-h{transform:scaleX(-1)}
+#guide{position:absolute;inset-inline:0;top:calc(var(--st) + var(--fs,34px) * 1.95);height:0;border-top:2px dashed rgba(255,209,102,.55);pointer-events:none}
+#guide::before{content:"";position:absolute;inset-inline-start:6px;top:-7px;border:7px solid transparent;border-inline-start-color:var(--mark)}
+#pauseTag{position:absolute;bottom:10px;inset-inline-end:max(14px,var(--sr));font-size:13px;color:var(--mark);background:var(--glass);padding:3px 10px;border-radius:99px}
+
+/* ‏الشريط العلويّ أثناء التسجيل */
+#hud{position:fixed;top:calc(var(--st) + 8px);inset-inline-start:max(12px,var(--sl));display:flex;gap:8px;align-items:center;z-index:5;pointer-events:none}
+#timer{font-variant-numeric:tabular-nums;direction:ltr;background:var(--rec);color:#fff;font-weight:700;padding:3px 10px;border-radius:6px;font-size:15px}
+#timer::before{content:"● "}
+
+#countdown{position:fixed;inset:0;display:grid;place-items:center;font-size:30vmin;font-weight:700;color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.6);pointer-events:none;z-index:6}
+
+/* ‏الشريط السفليّ */
+#bar{position:fixed;left:0;right:0;bottom:0;z-index:4;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  padding:16px max(18px,var(--sr)) calc(18px + var(--sb)) max(18px,var(--sl));
+  background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.side{display:flex;gap:10px;align-items:center}
+.side.end{justify-content:flex-end}
+.ib{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--glass);display:grid;place-items:center;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.ib svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ib:disabled{opacity:.35}
+#rec{width:78px;height:78px;border-radius:50%;border:4px solid #fff;background:transparent;display:grid;place-items:center;padding:0}
+#rec span{width:60px;height:60px;border-radius:50%;background:var(--rec);transition:all .2s}
+#rec.on span{width:30px;height:30px;border-radius:7px}
+
+/* ‏الألواح */
+.sheet{position:fixed;inset-inline:0;bottom:0;z-index:10;max-height:88vh;display:flex;flex-direction:column;background:#15181d;
+  border-radius:20px 20px 0 0;border-top:1px solid var(--line);padding:8px max(18px,var(--sr)) calc(16px + var(--sb)) max(18px,var(--sl))}
+.sheet::before{content:"";align-self:center;width:40px;height:5px;border-radius:9px;background:#3a4048;margin-bottom:10px}
+.sh{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.sh h2{margin:0;font-size:18px}
+.btn{border:0;border-radius:12px;padding:11px 16px;background:#262b33;font-weight:500}
+.btn.pri{background:var(--fg);color:var(--ink)}
+.btn.warn{background:transparent;color:#ff8a80;border:1px solid #4a2b2b}
+.scroll{overflow:auto;min-height:0}
+textarea{width:100%;min-height:38vh;resize:vertical;border-radius:12px;border:1px solid var(--line);background:#0e1115;padding:14px;font-size:17px;line-height:1.7}
+input[type=text]{width:100%;border-radius:12px;border:1px solid var(--line);background:#0e1115;padding:11px 14px;font-size:16px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.meta{color:var(--dim);font-size:13px}
+.list{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.item{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:#1d2128;border:1px solid transparent}
+.item.cur{border-color:var(--mark)}
+.item b{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item button{border:0;background:transparent;color:var(--dim);padding:4px 8px}
+.set{display:grid;grid-template-columns:7.5em 1fr 3.2em;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #22262d}
+.set output{text-align:left;font-variant-numeric:tabular-nums;color:var(--dim);direction:ltr}
+.set input[type=range]{width:100%;accent-color:var(--mark)}
+.tog{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid #22262d}
+.tog input{width:22px;height:22px;accent-color:var(--mark)}
+.seg{display:flex;gap:6px}
+.seg button{border:1px solid var(--line);background:transparent;border-radius:9px;padding:6px 12px}
+.seg button[aria-pressed=true]{background:var(--fg);color:var(--ink)}
+#review video{width:100%;max-height:52vh;border-radius:14px;background:#000}
+.note{font-size:13px;color:var(--dim);line-height:1.6;margin:10px 0 0}
+
+#gate{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:24px;text-align:center;background:var(--ink)}
+#gate h1{font-size:30px;margin:0 0 6px}
+#gate p{color:var(--dim);max-width:30em;line-height:1.7;margin:0 auto 20px}
+#gate .err{color:#ff8a80}
+#toast{position:fixed;left:50%;bottom:calc(120px + var(--sb));transform:translateX(-50%);z-index:30;background:#fff;color:#000;padding:9px 16px;border-radius:99px;font-size:14px}
+@media (prefers-reduced-motion:reduce){#rec span{transition:none}}
+</style>
+</head>
+<body>
+
+<video id="cam" playsinline autoplay muted></video>
+
+<div id="prompter" aria-label="نصّ المُلقِّن">
+  <div id="track"><div id="text"></div></div>
+  <div id="guide"></div>
+  <div id="pauseTag" hidden>متوقّف · المس للمتابعة</div>
+</div>
+
+<div id="hud" hidden><div id="timer">00:00</div></div>
+<div id="countdown" hidden></div>
+
+<div id="bar">
+  <div class="side">
+    <button class="ib" id="bScript" aria-label="النصوص"><svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M8 11h8M8 15h8M8 7h4"/></svg></button>
+    <button class="ib" id="bPlay" aria-label="تمرير النصّ بلا تسجيل"><svg viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z"/></svg></button>
+  </div>
+  <button id="rec" aria-label="ابدأ التسجيل"><span></span></button>
+  <div class="side end">
+    <button class="ib" id="bFlip" aria-label="بدّل الكاميرا"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><path d="M9.5 13a2.5 2.5 0 0 1 4.6-1.4M14.5 13a2.5 2.5 0 0 1-4.6 1.4"/><path d="M14 10.5l.2 1.2-1.2.2M10 15.5l-.2-1.2 1.2-.2"/></svg></button>
+    <button class="ib" id="bSet" aria-label="الإعدادات"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button>
+  </div>
+</div>
+
+<!-- لوح النصوص -->
+<section class="sheet" id="sScript" hidden>
+  <div class="sh"><h2>النصّ</h2><button class="btn pri" data-close>تمّ</button></div>
+  <div class="scroll">
+    <input type="text" id="sTitle" placeholder="عنوان النصّ" maxlength="60">
+    <div style="height:8px"></div>
+    <textarea id="sBody" placeholder="الصق نصَّك هنا…"></textarea>
+    <div class="row"><span class="meta" id="sMeta"></span></div>
+    <div class="row">
+      <button class="btn" id="sNew">نصٌّ جديد</button>
+      <button class="btn warn" id="sDel">احذف هذا النصّ</button>
+    </div>
+    <div class="list" id="sList"></div>
+  </div>
+</section>
+
+<!-- لوح الإعدادات -->
+<section class="sheet" id="sSet" hidden>
+  <div class="sh"><h2>الإعدادات</h2><button class="btn pri" data-close>تمّ</button></div>
+  <div class="scroll">
+    <div class="set"><label for="oSpeed">السرعة</label><input type="range" id="oSpeed" min="10" max="200" step="5"><output id="vSpeed"></output></div>
+    <div class="set"><label for="oSize">حجم الخطّ</label><input type="range" id="oSize" min="20" max="72" step="2"><output id="vSize"></output></div>
+    <div class="set"><label for="oHeight">ارتفاع اللوح</label><input type="range" id="oHeight" min="20" max="80" step="2"><output id="vHeight"></output></div>
+    <div class="set"><label for="oOpac">تعتيم الخلفيّة</label><input type="range" id="oOpac" min="0" max="90" step="5"><output id="vOpac"></output></div>
+    <div class="tog"><span>عدٌّ تنازليّ قبل التسجيل</span><input type="checkbox" id="oCount"></div>
+    <div class="tog"><span>اعكس النصّ (لزجاج الملقِّن)</span><input type="checkbox" id="oMirrorText"></div>
+    <div class="tog"><span>محاذاةُ النصّ</span>
+      <div class="seg" id="oAlign"><button data-v="right">يمين</button><button data-v="center">وسط</button></div></div>
+    <div class="tog"><span>الجودة</span>
+      <div class="seg" id="oQual"><button data-v="720">720p</button><button data-v="1080">1080p</button></div></div>
+    <p class="note">نصيحة: المس النصَّ لإيقافه أو متابعته، واسحبه بإصبعك لتعيده أو تقدّمه. النصُّ يظهر لك وحدَك ولا يدخل في الفيديو.</p>
+  </div>
+</section>
+
+<!-- لوح المراجعة -->
+<section class="sheet" id="review" hidden>
+  <div class="sh"><h2>المقطع</h2><span class="meta" id="rMeta"></span></div>
+  <div class="scroll">
+    <video id="rVid" playsinline controls></video>
+    <div class="row">
+      <button class="btn pri" id="rSave">احفظ المقطع</button>
+      <button class="btn" id="rAgain">سجّل من جديد</button>
+      <button class="btn warn" id="rDrop">احذفه</button>
+    </div>
+    <p class="note" id="rNote">على الآيفون اختر «حفظ الفيديو» من نافذة المشاركة ليذهب إلى الصور.</p>
+  </div>
+</section>
+
+<div id="gate">
+  <div>
+    <h1>المُلقِّن</h1>
+    <p>كاميرا تسجّل وأنت تقرأ نصَّك من أعلى الشاشة قربَ العدسة، فتبقى عيناك على المشاهد.</p>
+    <button class="btn pri" id="gStart">افتح الكاميرا</button>
+    <p class="err" id="gErr" hidden></p>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem('mlq.'+k); return v == null ? d : JSON.parse(v) }catch{ return d } },
+  set(k, v){ try{ localStorage.setItem('mlq.'+k, JSON.stringify(v)) }catch{} }
+};
+const toast = (m) => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 2200) };
+const fmt = s => { s = Math.floor(s); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0') };
+
+/* ‏الإعدادات */
+const opt = Object.assign({speed:45, size:34, height:38, opac:50, count:true, mirrorText:false, align:'right', qual:'1080', facing:'user'}, store.get('opt', {}));
+const saveOpt = () => store.set('opt', opt);
+function applyOpt(){
+  const r = document.documentElement.style;
+  r.setProperty('--fs', opt.size + 'px'); r.setProperty('--ph', opt.height);
+  r.setProperty('--po', opt.opac/100); r.setProperty('--ta', opt.align);
+  $('text').classList.toggle('mirror-h', opt.mirrorText);
+  $('vSpeed').textContent = opt.speed; $('vSize').textContent = opt.size;
+  $('vHeight').textContent = opt.height + '%'; $('vOpac').textContent = opt.opac + '%';
+  for (const b of $('oAlign').children) b.setAttribute('aria-pressed', b.dataset.v === opt.align);
+  for (const b of $('oQual').children) b.setAttribute('aria-pressed', b.dataset.v === opt.qual);
+}
+[['oSpeed','speed'],['oSize','size'],['oHeight','height'],['oOpac','opac']].forEach(([id,k]) => {
+  const el = $(id); el.value = opt[k];
+  el.addEventListener('input', () => { opt[k] = +el.value; applyOpt(); saveOpt() });
+});
+$('oCount').checked = opt.count; $('oCount').onchange = e => { opt.count = e.target.checked; saveOpt() };
+$('oMirrorText').checked = opt.mirrorText; $('oMirrorText').onchange = e => { opt.mirrorText = e.target.checked; applyOpt(); saveOpt() };
+$('oAlign').onclick = e => { const v = e.target.dataset.v; if (v){ opt.align = v; applyOpt(); saveOpt() } };
+$('oQual').onclick = e => { const v = e.target.dataset.v; if (v && v !== opt.qual){ opt.qual = v; applyOpt(); saveOpt(); if (stream && !rec) startCam() } };
+
+/* ‏النصوص */
+const SAMPLE = {id:'s1', title:'مثال: افتتاحيّة مقطع', body:
+`السلام عليكم، أهلًا بكم في مقطعٍ جديد.
+
+اليوم سأحدّثكم عن ثلاثة أخطاءٍ يقع فيها أغلبُ أصحاب المشاريع الصغيرة في سنتهم الأولى.
+
+الخطأ الأوّل: أن تبدأ بالمنتج قبل أن تسمع من العميل.
+
+الخطأ الثاني: أن تخلط مالَ المشروع بمالك الشخصيّ.
+
+الخطأ الثالث: أن تؤجّل التسويق حتّى «يكتمل» كلُّ شيء.
+
+إن كان المقطع مفيدًا فاحفظه وشاركه مع من يحتاجه. نلتقي في المقطع القادم.`};
+let scripts = store.get('scripts', null) || [SAMPLE];
+let curId = store.get('cur', scripts[0].id);
+const cur = () => scripts.find(s => s.id === curId) || scripts[0];
+const saveScripts = () => { store.set('scripts', scripts); store.set('cur', curId) };
+
+function renderText(){ $('text').textContent = cur().body || 'اكتب نصَّك من زرّ النصوص في الأسفل.'; }
+function wordsMeta(t){
+  const w = (t.trim().match(/\S+/g) || []).length;
+  return w + ' كلمة · نحو ' + fmt(w / 130 * 60) + ' بإيقاع حديثٍ عاديّ';
+}
+function renderList(){
+  const c = cur();
+  $('sTitle').value = c.title; $('sBody').value = c.body; $('sMeta').textContent = wordsMeta(c.body);
+  $('sList').replaceChildren(...scripts.map(s => {
+    const d = document.createElement('div'); d.className = 'item' + (s.id === c.id ? ' cur' : '');
+    const b = document.createElement('b'); b.textContent = s.title || 'بلا عنوان';
+    const go = document.createElement('button'); go.textContent = s.id === c.id ? 'الحاليّ' : 'افتح';
+    go.onclick = () => { curId = s.id; saveScripts(); renderList(); renderText(); resetScroll() };
+    d.append(b, go); return d;
+  }));
+}
+$('sTitle').oninput = e => { cur().title = e.target.value; saveScripts(); renderList() };
+$('sBody').oninput = e => { cur().body = e.target.value; saveScripts(); $('sMeta').textContent = wordsMeta(e.target.value); renderText() };
+$('sNew').onclick = () => { const s = {id:'s'+Date.now(), title:'نصٌّ جديد', body:''}; scripts.unshift(s); curId = s.id; saveScripts(); renderList(); renderText(); resetScroll(); $('sBody').focus() };
+$('sDel').onclick = () => {
+  if (scripts.length === 1){ cur().body = ''; cur().title = 'نصٌّ جديد' }
+  else { scripts = scripts.filter(s => s.id !== curId); curId = scripts[0].id }
+  saveScripts(); renderList(); renderText(); resetScroll(); toast('حُذف النصّ');
+};
+
+/* ‏الألواح */
+function openSheet(id){ for (const s of document.querySelectorAll('.sheet')) s.hidden = s.id !== id; }
+function closeSheets(){ for (const s of document.querySelectorAll('.sheet')) if (s.id !== 'review') s.hidden = true; }
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeSheets);
+$('bScript').onclick = () => { if (rec) return; renderList(); openSheet('sScript') };
+$('bSet').onclick = () => { if (rec) return; openSheet('sSet') };
+
+/* ‏التمرير */
+let pos = 0, playing = false, last = 0;
+const track = $('track');
+const maxPos = () => Math.max(0, track.scrollHeight - $('prompter').clientHeight * 0.35);
+function paint(){ track.style.transform = `translateY(${-pos}px)` }
+function resetScroll(){ pos = 0; paint() }
+function setPlaying(v){
+  playing = v; $('pauseTag').hidden = v || !(rec || pos > 0);
+  if (v){ last = performance.now(); requestAnimationFrame(tick) }
+}
+function tick(t){
+  if (!playing) return;
+  pos = Math.min(maxPos(), pos + opt.speed * (t - last) / 1000); last = t; paint();
+  if (pos >= maxPos()){ playing = false; return }
+  requestAnimationFrame(tick);
+}
+$('bPlay').onclick = () => {
+  if (rec) return;
+  if (playing){ setPlaying(false) } else { if (pos >= maxPos()) resetScroll(); closeSheets(); setPlaying(true) }
+};
+// ‏المسُ يوقف ويتابع، والسحبُ يحرّك النصّ
+let drag = null;
+$('prompter').addEventListener('pointerdown', e => { drag = {y:e.clientY, p:pos, moved:false, was:playing}; $('prompter').setPointerCapture(e.pointerId) });
+$('prompter').addEventListener('pointermove', e => {
+  if (!drag) return; const dy = e.clientY - drag.y;
+  if (Math.abs(dy) > 6){ if (!drag.moved){ drag.moved = true; playing = false } pos = Math.max(0, Math.min(maxPos(), drag.p - dy)); paint() }
+});
+$('prompter').addEventListener('pointerup', () => {
+  if (!drag) return;
+  if (drag.moved){ if (drag.was) setPlaying(true) } else setPlaying(!drag.was);
+  drag = null;
+});
+
+/* ‏الكاميرا */
+let stream = null;
+async function startCam(){
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  const h = opt.qual === '1080' ? 1080 : 720;
+  const want = { video:{ facingMode:opt.facing, width:{ideal:h*16/9}, height:{ideal:h}, frameRate:{ideal:30} },
+                 audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true } };
+  try { stream = await navigator.mediaDevices.getUserMedia(want) }
+  catch(e){ stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:opt.facing}, audio:true}) }
+  $('cam').srcObject = stream; $('cam').classList.toggle('mirror', opt.facing === 'user');
+  await $('cam').play().catch(() => {});
+}
+$('gStart').onclick = async () => {
+  if (!navigator.mediaDevices?.getUserMedia){ return gateErr('هذا المتصفّح لا يسمح بالكاميرا هنا. افتح الرابط بـhttps في Safari أو Chrome.') }
+  try { await startCam(); $('gate').hidden = true; wake() }
+  catch(e){ gateErr(e.name === 'NotAllowedError' ? 'رُفض إذنُ الكاميرا أو الميكروفون. اسمح بهما من إعدادات المتصفّح ثمّ أعد المحاولة.' : 'تعذّر فتح الكاميرا: ' + e.message) }
+};
+function gateErr(m){ $('gErr').textContent = m; $('gErr').hidden = false }
+$('bFlip').onclick = async () => { if (rec) return; opt.facing = opt.facing === 'user' ? 'environment' : 'user'; saveOpt(); try{ await startCam() }catch(e){ toast('تعذّر تبديل الكاميرا') } };
+
+let lock = null;
+async function wake(){ try{ lock = await navigator.wakeLock?.request('screen') }catch{} }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && $('gate').hidden) wake() });
+
+/* ‏التسجيل */
+let rec = null, chunks = [], t0 = 0, timerH = 0, blob = null, blobUrl = null, ext = 'mp4';
+function pickMime(){
+  const c = ['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1,mp4a','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
+  return c.find(m => window.MediaRecorder?.isTypeSupported?.(m)) || '';
+}
+async function countdown(){
+  if (!opt.count) return;
+  const el = $('countdown'); el.hidden = false;
+  for (const n of [3,2,1]){ el.textContent = n; await new Promise(r => setTimeout(r, 800)) }
+  el.hidden = true;
+}
+$('rec').onclick = async () => {
+  if (rec){ return stopRec() }
+  if (!stream || !window.MediaRecorder){ return toast('التسجيل غيرُ مدعومٍ في هذا المتصفّح') }
+  closeSheets(); setPlaying(false); resetScroll();
+  $('rec').disabled = true;
+  await countdown();
+  const mime = pickMime(); ext = mime.includes('mp4') ? 'mp4' : 'webm';
+  try { rec = new MediaRecorder(stream, mime ? {mimeType:mime, videoBitsPerSecond: opt.qual === '1080' ? 8e6 : 5e6} : undefined) }
+  catch { rec = new MediaRecorder(stream) }
+  chunks = [];
+  rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+  rec.onstop = finish;
+  rec.start(1000);
+  t0 = Date.now(); $('hud').hidden = false; $('timer').textContent = '00:00';
+  timerH = setInterval(() => $('timer').textContent = fmt((Date.now() - t0) / 1000), 250);
+  $('rec').disabled = false; $('rec').classList.add('on'); $('rec').setAttribute('aria-label','أوقف التسجيل');
+  ['bScript','bSet','bFlip','bPlay'].forEach(id => $(id).disabled = true);
+  setPlaying(true);
+};
+function stopRec(){ if (rec && rec.state !== 'inactive') rec.stop() }
+function finish(){
+  const dur = (Date.now() - t0) / 1000;
+  clearInterval(timerH); $('hud').hidden = true; setPlaying(false); $('pauseTag').hidden = true;
+  $('rec').classList.remove('on'); $('rec').setAttribute('aria-label','ابدأ التسجيل');
+  ['bScript','bSet','bFlip','bPlay'].forEach(id => $(id).disabled = false);
+  blob = new Blob(chunks, {type: rec.mimeType || ('video/' + ext)}); rec = null;
+  if (blobUrl) URL.revokeObjectURL(blobUrl);
+  blobUrl = URL.createObjectURL(blob);
+  $('rVid').src = blobUrl;
+  $('rMeta').textContent = fmt(dur) + ' · ' + (blob.size / 1048576).toFixed(1) + ' ميغابايت';
+  openSheet('review');
+}
+function fileName(){
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return `mulaqqin-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}.${ext}`;
+}
+$('rSave').onclick = async () => {
+  const file = new File([blob], fileName(), {type: blob.type});
+  if (navigator.canShare?.({files:[file]})){
+    try { await navigator.share({files:[file]}); return } catch(e){ if (e.name === 'AbortError') return }
+  }
+  const a = document.createElement('a'); a.href = blobUrl; a.download = file.name; document.body.append(a); a.click(); a.remove();
+  toast('بدأ تنزيلُ المقطع');
+};
+const dropClip = () => { $('rVid').pause(); $('rVid').removeAttribute('src'); $('rVid').load(); $('review').hidden = true; resetScroll() };
+$('rAgain').onclick = () => { dropClip(); $('rec').click() };
+$('rDrop').onclick = () => { dropClip(); toast('حُذف المقطع') };
+
+applyOpt(); renderText();
+})();
+</script>
+</body>
+</html>
